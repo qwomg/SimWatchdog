@@ -11,25 +11,23 @@ gh release create v1.0.1 build/SimWatchdog.zip build/SimWatchdog.zip.sha256 --ti
 
 Then update the Homebrew cask in `qwomg/homebrew-tap` (`version` and `sha256` from `SimWatchdog.zip.sha256`).
 
-## Notarized build (needs an Apple Developer ID certificate)
+## Notarized build (the paid one)
 
-The notarized build is the one that opens without any Gatekeeper warning. You need a **"Developer ID Application"** certificate (Xcode > Settings > Accounts > Manage Certificates > + > Developer ID Application, Account Holder only) and notarization credentials stored once in the keychain:
-
-```bash
-xcrun notarytool store-credentials "simwatchdog-notary" --apple-id YOU@EXAMPLE.COM --team-id TEAMID --password APP-SPECIFIC-PASSWORD
-```
-
-Then:
+Needs a **"Developer ID Application"** certificate (Xcode > Settings > Apple Accounts > team > Manage Certificates > + > Developer ID Application; an Admin can create it) and notarization credentials stored once in the keychain, either with an App Store Connect API key (needs its Issuer ID) or an Apple ID app-specific password:
 
 ```bash
-SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" ./build.sh      # hardened runtime + timestamp
-xcrun notarytool submit build/SimWatchdog.zip --keychain-profile "simwatchdog-notary" --wait
-xcrun stapler staple build/SimWatchdog.app
-(cd build && rm SimWatchdog.zip && ditto -c -k --keepParent SimWatchdog.app SimWatchdog.zip && shasum -a 256 SimWatchdog.zip > SimWatchdog.zip.sha256)
-spctl --assess --type execute --verbose build/SimWatchdog.app                # should say: accepted, source=Notarized Developer ID
+xcrun notarytool store-credentials simwatchdog-notary \
+  --key ~/.appstoreconnect/private_keys/AuthKey_<KEYID>.p8 --key-id <KEYID> --issuer <ISSUER-UUID>
 ```
 
-These notarization steps have not been run yet (no Developer ID certificate was available when this was written), so treat them as a checklist and verify the `spctl` result.
+Then one command builds, signs (hardened runtime + timestamp), notarizes, staples and verifies:
+
+```bash
+SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" tools/notarize.sh
+# -> build/SimWatchdog-notarized.zip (+ .sha256). spctl must report: accepted, source=Notarized Developer ID
+```
+
+Signing with the Developer ID certificate has been verified (`codesign --verify --strict`, hardened runtime, secure timestamp). The notarization submission itself has not been run yet because it needs the credentials above.
 
 ## Mac App Store
 
