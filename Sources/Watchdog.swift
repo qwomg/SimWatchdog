@@ -77,6 +77,7 @@ final class Watchdog {
     static let simDetect = "Simulator.app/Contents/MacOS/Simulator|CoreSimulator/Devices|launchd_sim"
     /// Everything we force-kill once the graceful shutdown has had its few seconds.
     static let simKill = simDetect + "|SimLaunchHost|SimulatorTrampoline"
+    static let isSandboxed = ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil
     static let androidRegex = "(qemu-system[^ ]*|emulator[0-9]*) .*-avd"
     /// Never force-quit these, even if the user lists them.
     static let protectedApps: Set<String> = ["finder", "dock", "simwatchdog", "loginwindow", "systemuiserver"]
@@ -155,7 +156,9 @@ final class Watchdog {
 
             if sims, run("/usr/bin/pgrep", ["-f", Watchdog.simDetect]).status == 0 {
                 if !dry {
-                    run("/usr/bin/xcrun", ["simctl", "shutdown", "all"], timeout: 4)   // graceful, but never wait long
+                    // Graceful shutdown first, but never wait long. xcrun refuses to run inside the App Sandbox
+                    // (Mac App Store build), where we go straight to closing the processes.
+                    if !Watchdog.isSandboxed { run("/usr/bin/xcrun", ["simctl", "shutdown", "all"], timeout: 4) }
                     run("/usr/bin/pkill", ["-9", "-f", Watchdog.simKill])
                 }
                 closed.append("Simulators")
