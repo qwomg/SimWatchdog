@@ -11,6 +11,8 @@ let delegate = AppDelegate()
 delegate.fakeLevel = value(after: "--fake-level").flatMap { Int($0) }
 delegate.dryRun = args.contains("--dry-run")
 delegate.snapshotPath = value(after: "--snapshot")
+delegate.menuSnapshotPath = value(after: "--snapshot-menu")
+delegate.appearanceName = value(after: "--appearance")
 app.delegate = delegate
 app.setActivationPolicy(.accessory)
 app.run()

@@ -18,7 +18,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     var fakeLevel: Int?
     var dryRun = false
     var snapshotPath: String?
-    private var isTestRun: Bool { fakeLevel != nil || dryRun || snapshotPath != nil }
+    var menuSnapshotPath: String?      // --snapshot-menu out.png [--appearance dark|light]
+    var appearanceName: String?
+    private var isTestRun: Bool { fakeLevel != nil || dryRun || snapshotPath != nil || menuSnapshotPath != nil }
 
     // MARK: Lifecycle
 
@@ -49,6 +51,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         Log.write("started v\(App.version) (threshold \(settings.threshold)%, every \(settings.interval)s)")
 
         if !isTestRun { firstRunOnboarding() }
+        if let path = menuSnapshotPath { captureMenu(to: path) }
+    }
+
+    // MARK: Screenshot support (opens the real menu and captures our own windows; needs no screen-recording permission)
+
+    private func captureMenu(to path: String) {
+        if let name = appearanceName { NSApp.appearance = NSAppearance(named: name == "dark" ? .darkAqua : .aqua) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in self?.statusItem.button?.performClick(nil) }
+        let t = Timer(timeInterval: 1.8, repeats: false) { [weak self] _ in
+            guard let self = self else { return }
+            let pid = Int(ProcessInfo.processInfo.processIdentifier)
+            let list = (CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]]) ?? []
+            let mine = list.filter { ($0[kCGWindowOwnerPID as String] as? Int) == pid && ($0[kCGWindowLayer as String] as? Int ?? 0) >= 100 }
+            let menuWindow = mine.max { a, b in
+                func area(_ w: [String: Any]) -> CGFloat {
+                    let r = CGRect(dictionaryRepresentation: w[kCGWindowBounds as String] as! CFDictionary) ?? .zero
+                    return r.width * r.height
+                }
+                return area(a) < area(b)
+            }
+            typealias Capture = @convention(c) (CGRect, UInt32, UInt32, UInt32) -> Unmanaged<CGImage>?
+            if let id = menuWindow?[kCGWindowNumber as String] as? UInt32,
+               let sym = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGWindowListCreateImage") {   // RTLD_DEFAULT
+                let capture = unsafeBitCast(sym, to: Capture.self)
+                if let image = capture(.null, 8, id, 9)?.takeRetainedValue() {      // IncludingWindow, IgnoreFraming | BestResolution
+                    let rep = NSBitmapImageRep(cgImage: image)
+                    try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+                }
+            }
+            self.statusItem.menu?.cancelTracking()
+            exit(0)
+        }
+        RunLoop.main.add(t, forMode: .common)
     }
 
     /// Opening the app again (Finder, Spotlight) always brings up Settings, which is also how to get the icon back.
