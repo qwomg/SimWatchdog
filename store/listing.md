@@ -2,8 +2,10 @@
 
 Copy for a storefront page (website, Gumroad, Lemon Squeezy, or an app store if one ever becomes possible). Screenshots are in `store/screenshots/` (2880x1800, PNG, no alpha: an accepted Mac App Store size). Third-party product names (Claude Code, Codex, Cursor, ...) are deliberately NOT used here: app stores reject other companies' trademarks in metadata. They live in the README only.
 
-## Name
-SimWatchdog
+## Name (max 30 characters)
+SimWatchdog: Memory Guard
+
+_The app's own name (menu bar, bundle) stays "SimWatchdog"; only the store listing name carries "Memory Guard" for search._
 
 ## Subtitle (max 30 characters)
 Stop simulator memory crashes
