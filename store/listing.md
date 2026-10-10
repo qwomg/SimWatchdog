@@ -15,7 +15,7 @@ Running several simulators, builds or AI coding agents? SimWatchdog closes your 
 memory,simulator,xcode,kernel panic,crash,RAM,watchdog,menu bar,developer,emulator,out of memory
 
 ## Description
-Your Mac restarts "because of a problem" while you build and test? Very often the real problem is memory: a handful of iOS Simulators, Xcode, previews and parallel tests quietly eat all your RAM until macOS freezes or panics.
+Your Mac restarts "because of a problem" while you build and test? One common culprit is memory: a handful of iOS Simulators, Xcode, previews and parallel tests quietly eat all your RAM until macOS freezes or panics.
 
 SimWatchdog lives in your menu bar and watches available memory. When it runs low, it shuts down your simulators for you, before the crash, so you keep your work.
 
