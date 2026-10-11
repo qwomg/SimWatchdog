@@ -206,7 +206,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.messageText = "SimWatchdog is running"
-        alert.informativeText = "It lives in your menu bar and checks memory in the background. If your Mac gets close to running out of memory, it force-closes iOS Simulators first, so macOS never has to crash or restart.\n\nStart it automatically when you log in? It can only protect you while it is running."
+        alert.informativeText = "It lives in your menu bar and checks memory in the background. If your Mac gets close to running out of memory, it closes iOS Simulators first and, if memory is still critical, asks the biggest apps to quit (unsaved work in an app that refuses is lost). You can switch that off or protect specific apps in Settings.\n\nStart it automatically when you log in? It can only protect you while it is running."
         alert.addButton(withTitle: "Start at Login")
         alert.addButton(withTitle: "Not Now")
         if alert.runModal() == .alertFirstButtonReturn { try? SMAppService.mainApp.register() }

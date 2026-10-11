@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 BIN=build/SimWatchdog.app/Contents/MacOS/SimWatchdog
 T=$(mktemp -d)
 LAST="10:42 AM: closed Simulators (memory 12%)"
-"$BIN" --snapshot "$T/settings.png"
+"$BIN" --snapshot "$T/settings.png" -neverCloseApps ""   # clean defaults, not the developer's own list
 "$BIN" --snapshot-menu "$T/menu.png"     --appearance dark --fake-level 62 -lastAction "$LAST"
 "$BIN" --snapshot-menu "$T/menu-low.png" --appearance dark --fake-level 14 -lastAction "$LAST"
 swiftc tools/compose-screenshots.swift -o "$T/compose"

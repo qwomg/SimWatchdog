@@ -91,6 +91,20 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
         neverField.delegate = self
         neverField.widthAnchor.constraint(equalToConstant: 440).isActive = true
 
+        func column(_ apps: [Settings.KnownApp]) -> NSStackView {
+            let col = NSStackView(views: apps.map { checkbox($0.key, $0.title) })
+            col.orientation = .vertical
+            col.alignment = .leading
+            col.spacing = 6
+            return col
+        }
+        let half = (Settings.knownApps.count + 1) / 2
+        let protectRow = NSStackView(views: [column(Array(Settings.knownApps.prefix(half))),
+                                             column(Array(Settings.knownApps.suffix(from: half)))])
+        protectRow.orientation = .horizontal
+        protectRow.alignment = .top
+        protectRow.spacing = 24
+
         let reset = NSButton(title: "Reset to Defaults", target: self, action: #selector(resetDefaults))
         let link = NSTextField(labelWithAttributedString: {
             let text = "SimWatchdog \(App.version)  ·  github.com/qwomg/SimWatchdog"
@@ -121,9 +135,11 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
             help("Force-quitting loses unsaved work in that app. Leave this empty unless you are sure."),
             checkbox("quitBigApps", "If memory is still critical, also quit the biggest apps"),
             bigRow,
-            NSTextField(labelWithString: "Never close these apps (names, separated by commas):"),
+            NSTextField(labelWithString: "Never close these apps (nothing is protected unless you tick it):"),
+            protectRow,
+            NSTextField(labelWithString: "Other apps to never close (names, separated by commas):"),
             neverField,
-            help("Only automatic actions do this, never the menu's manual button. Apps are asked to quit first so they can save; any app still running after 8 seconds is force-quit and its unsaved work is lost. At most two apps per round."),
+            help("Only automatic actions do this, never the menu's manual button. Apps are asked to quit first so they can save; any app still running after 8 seconds is force-quit and its unsaved work is lost. At most two apps per round. \"Simulator / Device Hub\" protects the Simulator app itself; the Simulators checkbox above controls closing simulators."),
 
             heading("General"),
             checkbox("launchAtLogin", "Launch at login (recommended: it can only protect you while it runs)"),
@@ -168,6 +184,7 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
         neverField.stringValue = s.neverCloseApps
         bigAppPopup.selectItem(at: Settings.bigAppChoices.firstIndex { $0.megabytes == s.bigAppMinMB } ?? 2)
         checks["quitBigApps"]?.state = s.quitBigApps ? .on : .off
+        for app in Settings.knownApps { checks[app.key]?.state = s.isProtected(app.key) ? .on : .off }
         checks["triggerOnCritical"]?.state = s.triggerOnCritical ? .on : .off
         checks["closeSimulators"]?.state = s.closeSimulators ? .on : .off
         checks["closeAndroidEmulator"]?.state = s.closeAndroidEmulator ? .on : .off
@@ -205,7 +222,10 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
         case "showPercent": s.showPercent = on
         case "showIcon": s.showIcon = on
         case "launchAtLogin": setLaunchAtLogin(on)
-        default: break
+        default:
+            if Settings.knownApps.contains(where: { $0.key == sender.identifier?.rawValue }) {
+                s.setProtected(sender.identifier!.rawValue, on)
+            }
         }
     }
 

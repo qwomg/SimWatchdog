@@ -9,7 +9,7 @@ If your Mac keeps showing **"Your computer was restarted because of a problem"**
 </p>
 
 - Lives in the menu bar and shows your free memory (turns red as you get close)
-- Closes simulators automatically when available memory drops below a level you choose, and (opt-in) asks the biggest apps to quit if memory is still critical
+- Closes simulators automatically when available memory drops below a level you choose, and, if memory is still critical, asks the biggest apps to quit (on by default; switch it off or protect individual apps in Settings)
 - Writes a **"TOP apps" line to its log every time it triggers**, so you can see what was really eating your memory
 - About 55 MB of RAM and 0% CPU when idle: it reads one number from the kernel every few seconds
 - Universal binary (Apple Silicon and Intel), macOS 13 or later, no dependencies, no network access, no telemetry
@@ -76,9 +76,10 @@ Click the menu bar icon > **Settings...** (or just open the app again).
 | Also act on critical memory pressure | on | Triggers when macOS itself says pressure is critical, even above the threshold. |
 | iOS / watchOS / tvOS / visionOS Simulators | on | Shut down and kill all simulator processes. |
 | Android Emulator | off | Also kill running Android emulators. |
-| If memory is still critical, also quit the biggest apps | off | Opt-in. After simulators and listed apps are closed, if memory is still low it asks the largest apps (Chrome and Electron apps count all their helper processes) to quit, and force-quits any still running after 8 seconds. At most 2 apps per round. |
+| If memory is still critical, also quit the biggest apps | **on** | After simulators and listed apps are closed, if memory is still low it asks the largest apps (Chrome and Electron apps count all their helper processes) to quit, and force-quits any still running after 8 seconds. At most 2 apps per round. |
 | Only apps using more than | 3 GB | Size an app must reach to be a candidate (1-8 GB). |
-| Never close these apps | empty | Names (comma-separated) that are never closed automatically, e.g. `Terminal, Xcode`. Finder, the Dock and SimWatchdog itself are always protected. |
+| Never close: Claude desktop app, Claude Code CLI (the terminal apps it runs in), ChatGPT / Codex, Google Chrome, Simulator / Device Hub, Xcode | **all off** | One switch per app. **Nothing is protected unless you tick it**, so by default these apps are fair game when memory is critical. "Simulator / Device Hub" protects the Simulator app itself; the Simulators switch above controls closing simulators. |
+| Other apps to never close | empty | Any other app names (comma-separated). Finder, the Dock and SimWatchdog itself are always protected. |
 | Force-quit these apps | empty | Names (comma-separated) of other apps to force-quit, e.g. `Google Chrome, Docker Desktop`. Unsaved work in them is lost, so use with care. |
 | Launch at login | asks on first run | Starts SimWatchdog when you log in. |
 | Notification, % in menu bar, show icon | on | Cosmetic. If you hide the icon, open the app again to bring it back. |
@@ -121,7 +122,7 @@ If the compressor is at or near **100% with "(BAD)"** and there are many swap fi
 1. Every few seconds it reads the kernel's `kern.memorystatus_level` (the percentage of memory macOS considers available, the same figure behind Activity Monitor's *Memory Pressure* graph) and `kern.memorystatus_vm_pressure_level`.
 2. If available memory is at or below your threshold (default **15%**), or macOS reports *critical* pressure, it checks again 3 seconds later so a momentary spike doesn't trigger it.
 3. If it is still low, it runs `xcrun simctl shutdown all`, waits at most 4 seconds, then force-kills whatever simulator processes are left, and shows a notification.
-4. If **"also quit the biggest apps"** is on and memory is still low 5 seconds later, it asks the largest non-protected apps over your size limit to quit (so they can save), force-quits any that are still running after 8 seconds, and logs which ones.
+4. If **"also quit the biggest apps"** is on (the default) and memory is still low 5 seconds later, it asks the largest non-protected apps over your size limit to quit (so they can save), force-quits any that are still running after 8 seconds, and logs which ones.
 5. It then waits 45 seconds before it can act again. As memory gets close to the limit it automatically checks more often, whatever interval you chose.
 
 Everything else (Xcode, your editor, browsers) is left alone unless you list it in the settings or turn on the biggest-apps option.
@@ -191,6 +192,8 @@ rm -f ~/Library/Logs/SimWatchdog.log
 If you enabled *Launch at login*, turn it off first in the settings, or remove it in **System Settings > General > Login Items**.
 
 ## FAQ
+
+**Is it safe that it quits apps by default?** Apps are asked to quit first, so most save their work and close normally; only an app that is still running 8 seconds later is force-quit, and its unsaved work is lost. It only happens when memory is critical (when macOS itself is about to freeze), and only to the two biggest apps over your size limit. If you would rather it never touches an app, tick it under "Never close" in Settings, or switch the whole option off.
 
 **My Mac still froze. Why?** Open the log (menu bar icon > Show Log) and find the last `TOP apps:` line. If the biggest users are not simulators, turn on *If memory is still critical, also quit the biggest apps* in Settings. If one app (browsers and Electron apps are the usual suspects) grows without stopping, that app has a memory leak: SimWatchdog can keep your Mac alive, but only that app's developer can fix the leak.
 

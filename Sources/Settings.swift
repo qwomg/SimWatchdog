@@ -16,6 +16,28 @@ final class Settings {
         ("1 GB", 1024), ("2 GB", 2048), ("3 GB", 3072), ("4 GB", 4096), ("6 GB", 6144), ("8 GB", 8192),
     ]
 
+    /// Well-known apps the user can protect with one switch. Matching is by app name or bundle identifier.
+    struct KnownApp {
+        let key: String
+        let title: String
+        let names: [String]
+    }
+    static let knownApps: [KnownApp] = [
+        KnownApp(key: "protectClaudeDesktop", title: "Claude desktop app",
+                 names: ["Claude", "com.anthropic.claudefordesktop"]),
+        KnownApp(key: "protectClaudeCode", title: "Claude Code CLI (terminal apps)",
+                 names: ["Terminal", "iTerm2", "iTerm", "Ghostty", "Warp", "kitty", "Alacritty", "WezTerm", "Hyper", "Tabby",
+                         "com.apple.Terminal", "com.googlecode.iterm2"]),
+        KnownApp(key: "protectChatGPT", title: "ChatGPT / Codex",
+                 names: ["ChatGPT", "Codex", "com.openai.chat"]),
+        KnownApp(key: "protectChrome", title: "Google Chrome",
+                 names: ["Google Chrome", "Google Chrome Beta", "Google Chrome Canary", "com.google.Chrome"]),
+        KnownApp(key: "protectSimulator", title: "Simulator / Device Hub",
+                 names: ["Simulator", "Device Hub", "com.apple.iphonesimulator"]),
+        KnownApp(key: "protectXcode", title: "Xcode",
+                 names: ["Xcode", "Xcode-beta", "com.apple.dt.Xcode"]),
+    ]
+
     private let d = UserDefaults.standard
     private let defaults: [String: Any] = [
         "threshold": 15,
@@ -24,7 +46,13 @@ final class Settings {
         "closeSimulators": true,
         "closeAndroidEmulator": false,
         "extraApps": "",
-        "quitBigApps": false,
+        "quitBigApps": true,                // on by default: nothing is protected until the user opts in
+        "protectClaudeDesktop": false,
+        "protectClaudeCode": false,
+        "protectChatGPT": false,
+        "protectChrome": false,
+        "protectSimulator": false,
+        "protectXcode": false,
         "bigAppMinMB": 3072,
         "neverCloseApps": "",
         "notify": true,
@@ -85,8 +113,14 @@ final class Settings {
         get { d.string(forKey: "neverCloseApps") ?? "" }
         set { store(newValue, "neverCloseApps") }
     }
+    func isProtected(_ key: String) -> Bool { d.bool(forKey: key) }
+    func setProtected(_ key: String, _ value: Bool) { store(value, key) }
+
+    /// Everything that must never be closed automatically: the switched-on known apps plus the free-text list.
     var neverCloseNames: [String] {
-        neverCloseApps.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        let typed = neverCloseApps.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        let known = Settings.knownApps.filter { isProtected($0.key) }.flatMap { $0.names }
+        return typed + known
     }
     var notify: Bool {
         get { d.bool(forKey: "notify") }

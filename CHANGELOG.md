@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0
+- "Quit the biggest apps when memory is still critical" is now **on by default**.
+- New "Never close" switches, one per well-known app: Claude desktop app, Claude Code CLI (terminal apps), ChatGPT / Codex, Google Chrome, Simulator / Device Hub, Xcode. **All off by default**: nothing is protected unless the user ticks it. The free-text "other apps" list stays.
+- First-run welcome text explains the biggest-apps step.
+
 ## 1.1.0
 - New, opt-in escalation: if memory is still critical after simulators and listed apps are closed, ask the biggest apps to quit (force-quit after 8 s). Settings: on/off, minimum size, a "never close" list. At most 2 apps per round.
 - The log now records the top memory-using apps at every trigger (`TOP apps:`) and a `STATUS` line every 5 minutes while macOS reports memory pressure.
