@@ -12,6 +12,9 @@ final class Settings {
         ("5 seconds", 5), ("10 seconds", 10), ("30 seconds", 30), ("1 minute", 60), ("5 minutes", 300),
     ]
     static let thresholdRange = 5...40
+    static let bigAppChoices: [(label: String, megabytes: Int)] = [
+        ("1 GB", 1024), ("2 GB", 2048), ("3 GB", 3072), ("4 GB", 4096), ("6 GB", 6144), ("8 GB", 8192),
+    ]
 
     private let d = UserDefaults.standard
     private let defaults: [String: Any] = [
@@ -21,6 +24,9 @@ final class Settings {
         "closeSimulators": true,
         "closeAndroidEmulator": false,
         "extraApps": "",
+        "quitBigApps": false,
+        "bigAppMinMB": 3072,
+        "neverCloseApps": "",
         "notify": true,
         "showPercent": true,
         "showIcon": true,
@@ -63,6 +69,24 @@ final class Settings {
     }
     var extraAppNames: [String] {
         extraApps.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    }
+    /// When pressure stays critical after simulators/listed apps are closed, also quit the biggest apps.
+    var quitBigApps: Bool {
+        get { d.bool(forKey: "quitBigApps") }
+        set { store(newValue, "quitBigApps") }
+    }
+    /// Only apps whose total memory footprint is above this are candidates.
+    var bigAppMinMB: Int {
+        get { max(d.integer(forKey: "bigAppMinMB"), 256) }
+        set { store(newValue, "bigAppMinMB") }
+    }
+    /// Comma-separated app names that are never closed automatically.
+    var neverCloseApps: String {
+        get { d.string(forKey: "neverCloseApps") ?? "" }
+        set { store(newValue, "neverCloseApps") }
+    }
+    var neverCloseNames: [String] {
+        neverCloseApps.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
     }
     var notify: Bool {
         get { d.bool(forKey: "notify") }

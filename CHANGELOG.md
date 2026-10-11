@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0
+- New, opt-in escalation: if memory is still critical after simulators and listed apps are closed, ask the biggest apps to quit (force-quit after 8 s). Settings: on/off, minimum size, a "never close" list. At most 2 apps per round.
+- The log now records the top memory-using apps at every trigger (`TOP apps:`) and a `STATUS` line every 5 minutes while macOS reports memory pressure.
+- Apps you list under "force-quit" are now asked to quit first and only force-quit after 8 seconds.
+- Support flags: `--login-status` and `--enable-login` for the Launch at login item.
+- Why: a real overnight freeze on a 36 GB Mac where ChatGPT, Claude and Chrome used about 28 GB and no simulator was running. macOS reported 42% memory available at the moment pressure turned critical.
+
 ## 1.0.1
 - Added `--snapshot-menu` (captures the real menu for screenshots) and a reproducible screenshot script (`tools/make-screenshots.sh`).
 - Developer ID signing support in `build.sh` (`SIGN_IDENTITY=...`), release/notarization checklist in `docs/RELEASING.md`.

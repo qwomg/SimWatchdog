@@ -24,6 +24,8 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
     private let sliderValue = NSTextField(labelWithString: "15%")
     private let intervalPopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let extraField = NSTextField(string: "")
+    private let neverField = NSTextField(string: "")
+    private let bigAppPopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private var checks: [String: NSButton] = [:]
 
     init() {
@@ -80,6 +82,15 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
         extraField.delegate = self
         extraField.widthAnchor.constraint(equalToConstant: 440).isActive = true
 
+        for choice in Settings.bigAppChoices { bigAppPopup.addItem(withTitle: choice.label) }
+        bigAppPopup.target = self
+        bigAppPopup.action = #selector(bigAppChanged)
+        let bigRow = NSStackView(views: [NSTextField(labelWithString: "Only apps using more than"), bigAppPopup])
+        bigRow.spacing = 8
+        neverField.placeholderString = "e.g. Terminal, Xcode"
+        neverField.delegate = self
+        neverField.widthAnchor.constraint(equalToConstant: 440).isActive = true
+
         let reset = NSButton(title: "Reset to Defaults", target: self, action: #selector(resetDefaults))
         let link = NSTextField(labelWithAttributedString: {
             let text = "SimWatchdog \(App.version)  ·  github.com/qwomg/SimWatchdog"
@@ -108,6 +119,11 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
             NSTextField(labelWithString: "Also force-quit these apps (names, separated by commas):"),
             extraField,
             help("Force-quitting loses unsaved work in that app. Leave this empty unless you are sure."),
+            checkbox("quitBigApps", "If memory is still critical, also quit the biggest apps"),
+            bigRow,
+            NSTextField(labelWithString: "Never close these apps (names, separated by commas):"),
+            neverField,
+            help("Only automatic actions do this, never the menu's manual button. Apps are asked to quit first so they can save; any app still running after 8 seconds is force-quit and its unsaved work is lost. At most two apps per round."),
 
             heading("General"),
             checkbox("launchAtLogin", "Launch at login (recommended: it can only protect you while it runs)"),
@@ -149,6 +165,9 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
         sliderValue.stringValue = "\(s.threshold)%"
         intervalPopup.selectItem(at: Settings.intervalChoices.firstIndex { $0.seconds == s.interval } ?? 1)
         extraField.stringValue = s.extraApps
+        neverField.stringValue = s.neverCloseApps
+        bigAppPopup.selectItem(at: Settings.bigAppChoices.firstIndex { $0.megabytes == s.bigAppMinMB } ?? 2)
+        checks["quitBigApps"]?.state = s.quitBigApps ? .on : .off
         checks["triggerOnCritical"]?.state = s.triggerOnCritical ? .on : .off
         checks["closeSimulators"]?.state = s.closeSimulators ? .on : .off
         checks["closeAndroidEmulator"]?.state = s.closeAndroidEmulator ? .on : .off
@@ -181,6 +200,7 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
         case "triggerOnCritical": s.triggerOnCritical = on
         case "closeSimulators": s.closeSimulators = on
         case "closeAndroidEmulator": s.closeAndroidEmulator = on
+        case "quitBigApps": s.quitBigApps = on
         case "notify": s.notify = on
         case "showPercent": s.showPercent = on
         case "showIcon": s.showIcon = on
@@ -189,7 +209,13 @@ final class SettingsWindowController: NSWindowController, NSTextFieldDelegate {
         }
     }
 
-    func controlTextDidChange(_ obj: Notification) { s.extraApps = extraField.stringValue }
+    func controlTextDidChange(_ obj: Notification) {
+        if (obj.object as? NSTextField) === neverField { s.neverCloseApps = neverField.stringValue } else { s.extraApps = extraField.stringValue }
+    }
+
+    @objc private func bigAppChanged() {
+        s.bigAppMinMB = Settings.bigAppChoices[max(bigAppPopup.indexOfSelectedItem, 0)].megabytes
+    }
 
     @objc private func resetDefaults() {
         s.resetToDefaults()

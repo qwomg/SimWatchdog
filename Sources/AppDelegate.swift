@@ -20,7 +20,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
     var snapshotPath: String?
     var menuSnapshotPath: String?      // --snapshot-menu out.png [--appearance dark|light]
     var appearanceName: String?
-    private var isTestRun: Bool { fakeLevel != nil || dryRun || snapshotPath != nil || menuSnapshotPath != nil }
+    var onlyApp: String?               // --only-app NAME: restrict the "biggest apps" step to one app (tests)
+    private var isTestRun: Bool { fakeLevel != nil || dryRun || snapshotPath != nil || menuSnapshotPath != nil || onlyApp != nil }
 
     // MARK: Lifecycle
 
@@ -42,6 +43,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
 
         watchdog.fakeLevel = fakeLevel
         watchdog.dryRun = dryRun
+        watchdog.onlyApp = onlyApp
         watchdog.onProbe = { [weak self] probe in self?.update(probe) }
         watchdog.onAction = { [weak self] _ in self?.refreshMenu() }
         NotificationCenter.default.addObserver(forName: .settingsChanged, object: nil, queue: .main) { [weak self] _ in
@@ -164,6 +166,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, UNUser
         var targets: [String] = []
         if settings.closeSimulators { targets.append("Simulators") }
         if settings.closeAndroidEmulator { targets.append("Android Emulator") }
+        if settings.quitBigApps { targets.append("the biggest apps if critical") }
         if !settings.extraAppNames.isEmpty { targets.append("\(settings.extraAppNames.count) other app\(settings.extraAppNames.count == 1 ? "" : "s")") }
         ruleItem.title = targets.isEmpty
             ? "Nothing selected to close (see Settings)"

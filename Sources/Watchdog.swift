@@ -70,6 +70,57 @@ enum Log {
     }
 }
 
+// MARK: - Per-app memory use
+
+struct AppUse {
+    let app: NSRunningApplication
+    let name: String
+    let bytes: UInt64
+    var gb: String { String(format: "%.1f GB", Double(bytes) / 1_073_741_824) }
+}
+
+enum Footprint {
+    private static func parent(of pid: pid_t) -> pid_t {
+        var info = proc_bsdinfo()
+        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+        return proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size ? pid_t(info.pbi_ppid) : 0
+    }
+
+    private static func footprint(of pid: pid_t) -> UInt64 {
+        var usage = rusage_info_v4()
+        let status = withUnsafeMutablePointer(to: &usage) { ptr in
+            ptr.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) { proc_pid_rusage(pid, RUSAGE_INFO_V4, $0) }
+        }
+        return status == 0 ? usage.ri_phys_footprint : 0
+    }
+
+    /// Memory footprint of every regular (Dock) app, including all its helper processes (browsers and
+    /// Electron apps spread their memory over many child processes).
+    static func appUsage() -> [AppUse] {
+        let apps = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }
+        let byPid = Dictionary(apps.map { ($0.processIdentifier, $0) }, uniquingKeysWith: { a, _ in a })
+        var pids = [pid_t](repeating: 0, count: 8192)
+        let count = Int(proc_listallpids(&pids, Int32(pids.count * MemoryLayout<pid_t>.size)))
+        var totals: [pid_t: UInt64] = [:]
+        for pid in pids.prefix(max(count, 0)) where pid > 0 {
+            var root = pid
+            var hops = 0
+            while byPid[root] == nil, hops < 12 {
+                let up = parent(of: root)
+                if up <= 1 { break }
+                root = up
+                hops += 1
+            }
+            guard byPid[root] != nil else { continue }
+            totals[root, default: 0] += footprint(of: pid)
+        }
+        return totals.compactMap { pid, bytes in
+            guard let app = byPid[pid] else { return nil }
+            return AppUse(app: app, name: app.localizedName ?? app.bundleIdentifier ?? "pid \(pid)", bytes: bytes)
+        }
+    }
+}
+
 // MARK: - Watchdog
 
 final class Watchdog {
@@ -87,8 +138,11 @@ final class Watchdog {
     private var timer: Timer?
     private var strikes = 0
     private var cooldownUntil = Date.distantPast
+    private var lastStatusLog = Date.distantPast
 
     var fakeLevel: Int?
+    /// Test only (--only-app NAME): the "biggest apps" step may only ever pick this app.
+    var onlyApp: String?
     var dryRun = false
     /// Called on the main thread after every probe.
     var onProbe: ((Probe) -> Void)?
@@ -116,6 +170,12 @@ final class Watchdog {
         let p = readProbe(fake: fakeLevel)
         onProbe?(p)
         var next = TimeInterval(settings.interval)
+
+        // Leave a trail: a Mac that sits under pressure for hours is exactly what we want to see afterwards.
+        if p.pressure >= 2, Date().timeIntervalSince(lastStatusLog) > 300 {
+            lastStatusLog = Date()
+            Log.write("STATUS memory available \(p.level)%, pressure level \(p.pressure)")
+        }
 
         if settings.paused {
             strikes = 0
@@ -147,12 +207,20 @@ final class Watchdog {
         let sims = settings.closeSimulators
         let android = settings.closeAndroidEmulator
         let extras = settings.extraAppNames
+        let bigApps = settings.quitBigApps && !manual
+        let bigMin = UInt64(settings.bigAppMinMB) * 1_048_576
+        let never = Set((settings.neverCloseNames).map { $0.lowercased() })
         let notify = settings.notify
         let dry = dryRun
+        let only = onlyApp
         Log.write("\(manual ? "MANUAL" : "TRIGGER") memory available \(p.level)%, pressure level \(p.pressure)\(dry ? " (dry run)" : "")")
 
         work.async { [weak self] in
             var closed: [String] = []
+
+            // Who is really using the memory? Always written to the log, whatever we end up closing.
+            let usage = Footprint.appUsage().sorted { $0.bytes > $1.bytes }
+            Log.write("TOP apps: " + usage.prefix(6).map { "\($0.name) \($0.gb)" }.joined(separator: ", "))
 
             if sims, run("/usr/bin/pgrep", ["-f", Watchdog.simDetect]).status == 0 {
                 if !dry {
@@ -168,25 +236,52 @@ final class Watchdog {
                 closed.append("Android Emulator")
             }
             if !extras.isEmpty {
-                closed += DispatchQueue.main.sync { Watchdog.forceQuit(names: extras, dry: dry) }
+                let wanted = extras.map { $0.lowercased() }
+                let victims = usage.filter { u in
+                    let lower = u.name.lowercased()
+                    return !Watchdog.protectedApps.contains(lower) && !never.contains(lower)
+                        && (wanted.contains(lower) || wanted.contains((u.app.bundleIdentifier ?? "").lowercased()))
+                }
+                Watchdog.quit(victims.map { $0.app }, dry: dry)
+                closed += victims.map { $0.name }
+            }
+
+            // Escalation: simulators and listed apps were not enough, so ask the biggest apps to quit.
+            if bigApps {
+                if !dry { Thread.sleep(forTimeInterval: 5) }                   // give the first steps time to work
+                let again = self?.readNow() ?? p
+                if self?.isLow(again) ?? true {
+                    let myPid = ProcessInfo.processInfo.processIdentifier
+                    let candidates = Footprint.appUsage().sorted { $0.bytes > $1.bytes }.filter { u in
+                        let lower = u.name.lowercased()
+                        if let only = only { return lower == only.lowercased() }
+                        return u.bytes >= bigMin && u.app.processIdentifier != myPid
+                            && !Watchdog.protectedApps.contains(lower) && !never.contains(lower)
+                            && !never.contains((u.app.bundleIdentifier ?? "").lowercased())
+                    }.prefix(2)
+                    if !candidates.isEmpty {
+                        Watchdog.quit(candidates.map { $0.app }, dry: dry)
+                        closed += candidates.map { "\($0.name) (\($0.gb))" }
+                    }
+                }
             }
 
             DispatchQueue.main.async { self?.report(closed: closed, probe: p, manual: manual, notify: notify, dry: dry) }
         }
     }
 
-    private static func forceQuit(names: [String], dry: Bool) -> [String] {
-        var quit: [String] = []
-        let wanted = names.map { $0.lowercased() }
-        for app in NSWorkspace.shared.runningApplications {
-            guard app.processIdentifier != ProcessInfo.processInfo.processIdentifier else { continue }
-            let name = app.localizedName ?? ""
-            let lower = name.lowercased()
-            guard !protectedApps.contains(lower), wanted.contains(lower) || wanted.contains((app.bundleIdentifier ?? "").lowercased()) else { continue }
-            if !dry { app.forceTerminate() }
-            quit.append(name)
+    private func readNow() -> Probe { readProbe(fake: fakeLevel) }
+
+    /// Asks apps to quit so they can save; whatever is still running after 8 seconds is force-quit.
+    private static func quit(_ apps: [NSRunningApplication], dry: Bool) {
+        guard !dry, !apps.isEmpty else { return }
+        DispatchQueue.main.sync { apps.forEach { $0.terminate() } }
+        let deadline = Date().addingTimeInterval(8)
+        while Date() < deadline {
+            if DispatchQueue.main.sync(execute: { apps.allSatisfy { $0.isTerminated } }) { return }
+            Thread.sleep(forTimeInterval: 0.5)
         }
-        return quit
+        DispatchQueue.main.sync { apps.filter { !$0.isTerminated }.forEach { $0.forceTerminate() } }
     }
 
     private func report(closed: [String], probe: Probe, manual: Bool, notify: Bool, dry: Bool) {
