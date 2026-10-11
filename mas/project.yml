@@ -41,7 +41,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.endlessaitools.simwatchdog
         PRODUCT_NAME: SimWatchdog
         MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: "1"
+        CURRENT_PROJECT_VERSION: "2"
         CODE_SIGN_STYLE: Automatic
         ENABLE_HARDENED_RUNTIME: YES
         ENABLE_APP_SANDBOX: YES
